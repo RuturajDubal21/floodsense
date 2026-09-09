@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FloodSense - Urban Flood Nowcasting System (Drainage & Rainfall Coupling)</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet GIS CSS (OpenStreetMap - Zero API Key Required) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- FloodSense Main Stylesheet -->
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body data-role="citizen">
+
+    <!-- Top Application Header -->
+    <header class="app-header">
+        <div class="app-brand">
+            <div class="brand-icon">🌧️</div>
+            <div>
+                <div class="brand-title">FloodSense</div>
+                <div class="brand-subtitle">Urban Flood Nowcasting System (0–3h Advance Prediction)</div>
+            </div>
+        </div>
+
+        <!-- Live Telemetry Ticker & Role Switcher -->
+        <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+            <div class="telemetry-pill citizen-only">
+                <span class="pulse-dot" style="background:#10b981;"></span>
+                <span>Live Telemetry • <span id="live-clock">18:52:30</span></span>
+            </div>
+            
+            <button id="btn-detect-gps" class="btn btn-sm btn-light" style="border:1px solid #38bdf8; color:#38bdf8;">
+                📍 Detect My GPS Location
+            </button>
+
+            <div class="role-switcher-container">
+                <button class="role-btn active" data-role-switch="citizen">👤 Citizen View</button>
+                <button class="role-btn" data-role-switch="admin">🛡️ Emergency Authority</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Flood Simulator Toolbar -->
+    <div class="simulation-bar">
+        <div style="display:flex; align-items:center; gap:8px;">
+            <strong style="color:#a5b4fc;">⚡ FLOOD SIMULATOR:</strong>
+            <span style="color:#cbd5e1; font-size:12px;">Simulate live weather & hydrological drainage overload</span>
+        </div>
+        <div class="sim-controls-group">
+            <button class="btn-sim btn-sim-rain" id="btn-sim-heavy-rain">🌧️ Simulate Heavy Rainfall</button>
+            <button class="btn-sim btn-sim-block" id="btn-sim-drain-block">🚫 Simulate Drain Blockage</button>
+            <button class="btn-sim btn-sim-burst" id="btn-sim-cloudburst">⚡ Simulate Cloudburst</button>
+            <button class="btn-sim btn-sim-reset" id="btn-sim-reset">🔄 Reset System</button>
+            <button class="btn-sim" id="btn-sim-tour" style="background:#4338ca; border-color:#6366f1;">⏯️ Run Demo Scenario</button>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="main-nav">
+        <!-- Citizen Navigation Tabs -->
+        <button class="nav-tab-btn active citizen-only" data-nav-tab="dashboard">📊 Safety Dashboard</button>
+        <button class="nav-tab-btn citizen-only" data-nav-tab="map">🗺️ Interactive GIS Map</button>
+        <button class="nav-tab-btn citizen-only" data-nav-tab="routes">🛣️ Safe Navigation</button>
+        <button class="nav-tab-btn citizen-only" data-nav-tab="reports">⚠️ Report Flooding</button>
+        <button class="nav-tab-btn citizen-only" data-nav-tab="alerts">🔔 Alerts & Config</button>
+
+        <!-- Admin Navigation Tabs -->
+        <button class="nav-tab-btn admin-only" data-nav-tab="admin_command">🛡️ Command Center</button>
+        <button class="nav-tab-btn admin-only" data-nav-tab="admin_analytics">📈 Hydrological Analytics</button>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="app-container">
+
+        <!-- Toasts -->
+        <div id="emergency-toast-container" style="position:fixed; top:80px; right:24px; z-index:9999; width:340px;"></div>
+        <div id="app-banner-toast" class="app-banner-toast"></div>
+
+        <!-- ===================================================================
+             VIEW 1: CITIZEN SAFETY DASHBOARD
+             =================================================================== -->
+        <section id="view-dashboard" class="view-section" style="display:block;">
+            
+            <div class="glass-panel" style="padding:24px; margin-bottom:24px; border-left:6px solid #38bdf8;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+                    <div>
+                        <div id="user-safety-badge" class="status-pill status-low">
+                            <span class="pulse-dot"></span> Current Flood Status: <strong>SAFE</strong> (15/100)
+                        </div>
+                        <h2 style="font-size:24px; margin-top:12px; color:#f8fafc;">
+                            Location: <span id="user-zone-name">Wakad Sub-basin</span> (Pune Metro)
+                        </h2>
+                    </div>
+                    <div style="display:flex; gap:24px; flex-wrap:wrap;">
+                        <div style="text-align:center;">
+                            <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; font-weight:700;">Rainfall</div>
+                            <div id="user-rainfall-val" style="font-size:22px; font-weight:800; color:#38bdf8;">15 mm/hr</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; font-weight:700;">Est. Water Depth</div>
+                            <div id="user-water-depth" style="font-size:22px; font-weight:800; color:#10b981;">0 cm</div>
+                        </div>
+                        <div style="text-align:center;">
+                            <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; font-weight:700;">Flood Prob.</div>
+                            <div id="user-flood-prob" style="font-size:22px; font-weight:800; color:#f8fafc;">18%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 0-3 Hour Nowcast Timeline Card -->
+            <div class="glass-panel" style="padding:24px; margin-bottom:24px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <h3 style="font-size:18px; color:#f8fafc;">⏱️ 0–3 Hour Flood Nowcast (Hydrological Forecast)</h3>
+                    <span style="font-size:11px; color:#94a3b8; font-weight:600;">Engine Status: Active • Confidence: 94%</span>
+                </div>
+                <div id="nowcast-timeline-container"></div>
+                <div style="margin-top:20px;">
+                    <canvas id="nowcast-chart-canvas"></canvas>
+                </div>
+            </div>
+
+            <!-- Grid: Nearby Roads & Quick Actions -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+                
+                <div class="glass-panel" style="padding:22px;">
+                    <h3 style="font-size:16px; margin-bottom:14px; color:#f8fafc;">🛣️ Nearby Road Flood Status</h3>
+                    <div id="nearby-roads-list"></div>
+                </div>
+
+                <div class="glass-panel" style="padding:22px;">
+                    <h3 style="font-size:16px; margin-bottom:14px; color:#f8fafc;">🚨 Emergency Protocol & Actions</h3>
+                    <div style="display:flex; flex-direction:column; gap:12px;">
+                        <button class="btn btn-primary" onclick="window.FloodSenseApp.switchTab('routes')">
+                            🗺️ Navigate via Flood-Safe Route
+                        </button>
+                        <button class="btn btn-warning" onclick="window.FloodSenseApp.switchTab('reports')">
+                            ⚠️ Report Local Flooding / Waterlogging
+                        </button>
+                        
+                        <div style="background:rgba(15,23,42,0.6); padding:14px; border-radius:8px; font-size:12px; color:#cbd5e1; margin-top:8px;">
+                            <strong style="color:#f8fafc;">Disaster Safety Instructions:</strong>
+                            <ul style="margin-left:18px; margin-top:6px; line-height:1.6;">
+                                <li>Do not drive through submerged underpasses (>15cm depth).</li>
+                                <li>Charge phone & store power banks for evacuation updates.</li>
+                                <li>Keep emergency helpline 108 / 101 on speed dial.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- ===================================================================
+             VIEW 2: INTERACTIVE GIS MAP (OpenStreetMap)
+             =================================================================== -->
+        <section id="view-map" class="view-section" style="display:none;">
+            <div class="glass-panel" style="padding:16px; margin-bottom:16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                    <h3 style="font-size:18px; color:#f8fafc;">🗺️ OpenStreetMap Interactive GIS Map</h3>
+                    <div style="font-size:12px; display:flex; gap:12px; align-items:center;">
+                        <span style="color:#10b981; font-weight:bold;">🟢 LOW (0-30)</span>
+                        <span style="color:#eab308; font-weight:bold;">🟡 MODERATE (31-60)</span>
+                        <span style="color:#f97316; font-weight:bold;">🟠 HIGH (61-80)</span>
+                        <span style="color:#ef4444; font-weight:bold;">🔴 CRITICAL (81-100)</span>
+                    </div>
+                </div>
+            </div>
+            <div id="citizen-gis-map" class="map-container-box"></div>
+        </section>
+
+        <!-- ===================================================================
+             VIEW 3: SAFE NAVIGATION ROUTING
+             =================================================================== -->
+        <section id="view-routes" class="view-section" style="display:none;">
+            <div class="glass-panel" style="padding:22px; margin-bottom:20px;">
+                <h3 style="font-size:18px; margin-bottom:14px; color:#f8fafc;">🛣️ Disaster Navigation & Flood-Safe Router</h3>
+                <div style="display:grid; grid-template-columns:1fr 2fr; gap:16px; align-items:center;">
+                    <div>
+                        <label class="form-label">Destination</label>
+                        <select id="select-destination" class="form-control">
+                            <option value="zone-shivajinagar">Shivajinagar Central Station (COEP)</option>
+                            <option value="zone-aundh">Aundh Relief Hospital</option>
+                            <option value="zone-hinjewadi">Hinjewadi IT Park Gate 1</option>
+                        </select>
+                    </div>
+                    <div style="font-size:12px; color:#94a3b8;">
+                        * FloodSense routing engine checks flood-risk level and automatically <strong>AVOIDS HIGH/CRITICAL flooded roads</strong>.
+                    </div>
+                </div>
+            </div>
+
+            <div id="route-comparison-container"></div>
+        </section>
+
+        <!-- ===================================================================
+             VIEW 4: CITIZEN FLOOD REPORTING FORM
+             =================================================================== -->
+        <section id="view-reports" class="view-section" style="display:none;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+                
+                <div class="glass-panel" style="padding:24px;">
+                    <h3 style="font-size:18px; margin-bottom:16px; color:#f8fafc;">⚠️ Report Local Flooding</h3>
+                    <form id="form-report-flood">
+                        <div class="form-group">
+                            <label class="form-label">Select Flood Zone / Location</label>
+                            <select id="report-zone-select" class="form-control">
+                                <option value="zone-wakad">Wakad Sub-basin (Wakad Flyover)</option>
+                                <option value="zone-baner">Baner Highway Corridor</option>
+                                <option value="zone-aundh">Aundh DP Road</option>
+                                <option value="zone-shivajinagar">Shivajinagar COEP Underpass</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Estimated Water Depth (cm)</label>
+                            <input type="range" id="report-water-depth" min="5" max="100" value="25" class="form-control" oninput="
+                                const val = parseInt(this.value);
+                                let desc = ' (Minor Waterlogging)';
+                                if (val > 30) desc = ' (🔴 Vehicle Hazard / Severe Overflow)';
+                                else if (val > 15) desc = ' (🟠 Ankle / Wheel Depth)';
+                                document.getElementById('depth-val-label').textContent = val + ' cm' + desc;
+                            ">
+                            <div style="text-align:right; font-size:12px; color:#38bdf8; font-weight:bold; margin-top:4px;" id="depth-val-label">25 cm (🟠 Ankle / Wheel Depth)</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Description / Remarks</label>
+                            <textarea id="report-description" class="form-control" rows="3" placeholder="Describe water accumulation, stuck vehicles, or drain overflow..."></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" style="width:100%;">
+                            📤 Submit Geotagged Flood Report
+                        </button>
+                    </form>
+                </div>
+
+                <div class="glass-panel" style="padding:24px;">
+                    <h3 style="font-size:18px; margin-bottom:16px; color:#f8fafc;">📋 Active Crowdsourced Reports</h3>
+                    <div id="reports-list-container"></div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             VIEW 5: ALERTS & CONFIGURATION
+             =================================================================== -->
+        <section id="view-alerts" class="view-section" style="display:none;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+                
+                <div class="glass-panel" style="padding:24px;">
+                    <h3 style="font-size:18px; margin-bottom:16px; color:#f8fafc;">⚙️ Alert Radius & Location Settings</h3>
+                    <div class="form-group">
+                        <label class="form-label">Primary Geofenced Radius</label>
+                        <select class="form-control">
+                            <option value="2.0">2.0 km (Immediate Evacuation Warning)</option>
+                            <option value="5.0">5.0 km (Broad Watch Area)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Saved Home Location</label>
+                        <input type="text" value="Wakad Municipal Colony, Pune" class="form-control" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Saved Work Location</label>
+                        <input type="text" value="COEP Technological University, Shivajinagar" class="form-control" readonly>
+                    </div>
+                </div>
+
+                <div class="glass-panel" style="padding:24px;">
+                    <h3 style="font-size:18px; margin-bottom:16px; color:#f8fafc;">📲 Multi-Channel Alert Payload Logs</h3>
+                    <div id="alerts-history-container"></div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ===================================================================
+             VIEW 6: ADMIN COMMAND CENTER
+             =================================================================== -->
+        <section id="view-admin_command" class="view-section" style="display:none;">
+            
+            <div class="grid-kpi">
+                <div class="glass-panel kpi-card" style="border-left-color:#ef4444;">
+                    <div class="kpi-title">Active High Alerts</div>
+                    <div id="kpi-active-alerts" class="kpi-value" style="color:#ef4444;">1</div>
+                </div>
+                <div class="glass-panel kpi-card" style="border-left-color:#f97316;">
+                    <div class="kpi-title">Critical Zones</div>
+                    <div id="kpi-critical-zones" class="kpi-value" style="color:#f97316;">1</div>
+                </div>
+                <div class="glass-panel kpi-card" style="border-left-color:#38bdf8;">
+                    <div class="kpi-title">City Drainage Util.</div>
+                    <div id="kpi-drainage-util" class="kpi-value" style="color:#38bdf8;">82%</div>
+                </div>
+                <div class="glass-panel kpi-card" style="border-left-color:#10b981;">
+                    <div class="kpi-title">Avg Rainfall</div>
+                    <div id="kpi-avg-rain" class="kpi-value" style="color:#10b981;">15 mm/hr</div>
+                </div>
+            </div>
+
+            <div style="margin-bottom:24px;">
+                <div class="glass-panel" style="padding:14px; margin-bottom:8px;">
+                    <strong style="color:#f8fafc;">🛡️ City Command Center OpenStreetMap GIS & Graph Hydraulics</strong>
+                </div>
+                <div id="admin-gis-map" class="map-container-box"></div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+                
+                <div class="glass-panel" style="padding:20px;">
+                    <h3 style="font-size:16px; margin-bottom:14px; color:#f8fafc;">⚡ Stormwater Pump Station Overrides</h3>
+                    <div id="admin-pump-controls"></div>
+                </div>
+
+                <div class="glass-panel" style="padding:20px;">
+                    <h3 style="font-size:16px; margin-bottom:14px; color:#f8fafc;">🚫 Emergency Road Closure Controls</h3>
+                    <div id="admin-road-controls"></div>
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- ===================================================================
+             VIEW 7: ADMIN HYDROLOGICAL ANALYTICS
+             =================================================================== -->
+        <section id="view-admin_analytics" class="view-section" style="display:none;">
+            <div class="glass-panel" style="padding:24px;">
+                <h3 style="font-size:18px; margin-bottom:16px; color:#f8fafc;">📈 Drainage Capacity Utilization & Flow Rate Analysis</h3>
+                <div id="admin-drainage-barchart"></div>
+            </div>
+        </section>
+
+        <footer class="safety-disclaimer">
+            ⚠️ <strong>Decision Support Notice:</strong> FloodSense provides decision-support predictions based on coupled hydrological graph modeling, OpenStreetMap GIS, and DEM terrain analysis. It is intended for early warning and operational planning, not a replacement for official district collectorate disaster response orders.
+        </footer>
+
+    </main>
+
+    <!-- OpenStreetMap Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="/js/data.js"></script>
+    <script src="/js/predictionEngine.js"></script>
+    <script src="/js/drainageGraph.js"></script>
+    <script src="/js/routingEngine.js"></script>
+    <script src="/js/notificationEngine.js"></script>
+    <script src="/js/mapManager.js"></script>
+    <script src="/js/chartManager.js"></script>
+    <script src="/js/app.js"></script>
+
+    <!-- Live Clock Script -->
+    <script>
+        setInterval(() => {
+            const clock = document.getElementById("live-clock");
+            if (clock) clock.textContent = new Date().toLocaleTimeString();
+        }, 1000);
+    </script>
+
+</body>
+</html>
