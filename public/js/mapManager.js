@@ -1,10 +1,11 @@
 /**
- * FloodSense - Interactive Leaflet GIS Map Controller (OpenStreetMap + Refined Visuals)
- * Renders Base Map, User Location, Flood Polygons, Rainfall Layers, Drainage Graph, Facilities, Reports & Safe Routes
+ * FloodSense - Interactive Leaflet GIS Map Controller (OpenStreetMap + Safe Navigation)
+ * Renders Base Map, User Location, Flood Polygons, Rainfall Layers, Drainage Graph, Facilities, Reports & Dedicated Navigation Maps
  */
 
 window.MapManager = {
     map: null,
+    navMap: null,
     layers: {
         baseOsm: null,
         userLocation: null,
@@ -18,10 +19,17 @@ window.MapManager = {
         reports: null,
         route: null
     },
+    navLayers: {
+        origin: null,
+        dest: null,
+        directRoute: null,
+        safeRoute: null,
+        hazards: null
+    },
     layerControl: null,
 
     /**
-     * Initialize Leaflet GIS Map with pure OpenStreetMap tiles
+     * Initialize Primary Leaflet GIS Map with pure OpenStreetMap tiles
      */
     initMap: function(elementId, centerCoords, zoomLevel) {
         if (this.map) {
@@ -37,7 +45,6 @@ window.MapManager = {
 
         L.control.zoom({ position: "bottomright" }).addTo(this.map);
 
-        // Standard OpenStreetMap Tile Layer (Zero Key Required)
         const osmUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
         const osmAttrib = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors | <strong>FloodSense GIS</strong>';
         
@@ -58,9 +65,8 @@ window.MapManager = {
         this.layers.reports = L.layerGroup().addTo(this.map);
         this.layers.route = L.layerGroup().addTo(this.map);
 
-        // Interactive Layer Control Toggle
         const overlayMaps = {
-            "📍 Your Location Pin": this.layers.userLocation,
+            "📍 Station Origin Pin": this.layers.userLocation,
             "🌊 Flood Risk Zones": this.layers.zones,
             "🌧️ Rainfall Radar": this.layers.rainfallHeat,
             "🛣️ Road Network": this.layers.roads,
@@ -73,6 +79,112 @@ window.MapManager = {
         };
 
         this.layerControl = L.control.layers(null, overlayMaps, { position: 'topright', collapsed: true }).addTo(this.map);
+    },
+
+    /**
+     * Render Dedicated Interactive Navigation Map inside Safe Navigation View
+     */
+    renderDedicatedNavigationMap: function(elementId, routeResult, originCoords) {
+        const container = document.getElementById(elementId);
+        if (!container) return;
+
+        // Initialize navMap instance if not yet created
+        if (!this.navMap) {
+            this.navMap = L.map(elementId, {
+                center: originCoords || [18.5600, 73.7800],
+                zoom: 13,
+                zoomControl: false
+            });
+
+            L.control.zoom({ position: "bottomright" }).addTo(this.navMap);
+
+            const osmUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+            L.tileLayer(osmUrl, {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> | FloodSense Safe Router'
+            }).addTo(this.navMap);
+
+            this.navLayers.origin = L.layerGroup().addTo(this.navMap);
+            this.navLayers.dest = L.layerGroup().addTo(this.navMap);
+            this.navLayers.directRoute = L.layerGroup().addTo(this.navMap);
+            this.navLayers.safeRoute = L.layerGroup().addTo(this.navMap);
+            this.navLayers.hazards = L.layerGroup().addTo(this.navMap);
+        }
+
+        // Clear previous navigation layers
+        this.navLayers.origin.clearLayers();
+        this.navLayers.dest.clearLayers();
+        this.navLayers.directRoute.clearLayers();
+        this.navLayers.safeRoute.clearLayers();
+        this.navLayers.hazards.clearLayers();
+
+        const destObj = routeResult.destination;
+        const destCoords = destObj.coords;
+
+        // 1. Render Origin Pin (Green Pulsing GPS Marker - Re-added as requested)
+        const originIcon = L.divIcon({
+            html: `<div style="background:#10b981; color:#fff; font-size:11px; font-weight:bold; padding:4px 8px; border-radius:14px; border:2px solid #fff; box-shadow:0 0 10px #10b981; white-space:nowrap;">📍 START (ORIGIN)</div>`,
+            className: "nav-pin-origin",
+            iconSize: [110, 24],
+            iconAnchor: [55, 12]
+        });
+        const originMarker = L.marker(originCoords, { icon: originIcon });
+        originMarker.bindPopup(`<strong>📍 Start Location (Origin)</strong><br/>Coordinates: [${originCoords[0].toFixed(4)}, ${originCoords[1].toFixed(4)}]`);
+        this.navLayers.origin.addLayer(originMarker);
+
+        // 2. Render Destination Pin (Red Target Checkered Marker)
+        const destIcon = L.divIcon({
+            html: `<div style="background:#ef4444; color:#fff; font-size:11px; font-weight:bold; padding:4px 8px; border-radius:14px; border:2px solid #fff; box-shadow:0 0 10px #ef4444; white-space:nowrap;">🏁 DESTINATION</div>`,
+            className: "nav-pin-dest",
+            iconSize: [110, 24],
+            iconAnchor: [55, 12]
+        });
+        const destMarker = L.marker(destCoords, { icon: destIcon });
+        destMarker.bindPopup(`<strong>🏁 ${destObj.name}</strong><br/>Safe Destination`);
+        this.navLayers.dest.addLayer(destMarker);
+
+        // 3. Render Direct Route (Red Dashed Line with Hazard Callout)
+        if (routeResult.directRoute && routeResult.directRoute.pathCoordinates) {
+            const directPoly = L.polyline(routeResult.directRoute.pathCoordinates, {
+                color: "#ef4444",
+                weight: 5,
+                dashArray: "8, 8",
+                opacity: 0.75
+            }).bindTooltip(`❌ Direct Route (${routeResult.directRoute.maxWaterDepthCm}cm Flooded Underpass Hazard!)`);
+            this.navLayers.directRoute.addLayer(directPoly);
+
+            // Add Hazard Callout Pin at Wakad Underpass
+            const hazardIcon = L.divIcon({
+                html: `<div style="background:#dc2626; color:#fff; font-size:10px; font-weight:bold; padding:2px 6px; border-radius:4px; border:1px solid #fff; box-shadow:0 0 8px #dc2626;">⚠️ 28cm HAZARD</div>`,
+                className: "nav-pin-hazard",
+                iconSize: [80, 20]
+            });
+            const hazardMarker = L.marker([18.5960, 73.7620], { icon: hazardIcon });
+            hazardMarker.bindPopup(`<strong style="color:#ef4444;">⚠️ FLOODED UNDERPASS HAZARD</strong><br/>Water Depth: 28 cm<br/>Risk: CRITICAL — Detour Enforced by Dijkstra Router!`);
+            this.navLayers.hazards.addLayer(hazardMarker);
+        }
+
+        // 4. Render Recommended Safe Path (Glowing Green Polyline)
+        if (routeResult.safeRoute && routeResult.safeRoute.pathCoordinates) {
+            const safePoly = L.polyline(routeResult.safeRoute.pathCoordinates, {
+                color: "#10b981",
+                weight: 7,
+                opacity: 0.95
+            }).bindTooltip("✅ Recommended Flood-Safe Path (Elevation 574m)");
+            this.navLayers.safeRoute.addLayer(safePoly);
+
+            // Fit map bounds to encompass both Origin & Destination Pins cleanly
+            const bounds = L.latLngBounds([originCoords, destCoords]);
+            safePoly.getLatLngs().forEach(latlng => bounds.extend(latlng));
+            this.navMap.fitBounds(bounds, { padding: [55, 55] });
+        }
+
+        // Invalidate map size so Leaflet recalculates canvas dimensions
+        setTimeout(() => {
+            if (this.navMap) {
+                this.navMap.invalidateSize();
+            }
+        }, 150);
     },
 
     /**
@@ -100,14 +212,14 @@ window.MapManager = {
         marker.bindPopup(`
             <div style="font-size:13px; color:#f8fafc; font-family:Inter, sans-serif; padding:4px;">
                 <div style="display:flex; align-items:center; gap:6px; color:#38bdf8; font-weight:bold; font-size:14px;">
-                    📍 Your Live Location
+                    📍 Station Origin (Wakad Point)
                 </div>
                 <div style="font-size:11px; color:#94a3b8; margin:4px 0;">[${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}]</div>
                 <div style="font-size:12px; margin-top:6px;">
-                    Nearest Sub-basin: <strong>${nearestZone ? nearestZone.name : 'Wakad'}</strong>
+                    Sub-basin Area: <strong>${nearestZone ? nearestZone.name : 'Wakad'}</strong>
                 </div>
                 <div style="font-size:11px; color:#10b981; margin-top:4px; font-weight:bold;">
-                    🟢 GPS Sensor Active • Geofence Monitoring
+                    📍 Station Coordinates Active
                 </div>
             </div>
         `, { maxWidth: 280 });
@@ -116,7 +228,7 @@ window.MapManager = {
     },
 
     /**
-     * Render Flood-Risk Zones with Polygons (LOW -> green, MODERATE -> yellow, HIGH -> orange, CRITICAL -> red)
+     * Render Flood-Risk Zones with Polygons
      */
     renderZones: function(zones, zoneRiskMap, onZoneClick) {
         if (!this.layers.zones) return;
@@ -125,10 +237,10 @@ window.MapManager = {
         zones.forEach(zone => {
             const risk = zoneRiskMap[zone.id] || { colorHex: "#10b981", category: "LOW", riskScore: 10 };
 
-            let fillColorHex = "#10b981"; // LOW -> green
-            if (risk.category === "CRITICAL") fillColorHex = "#ef4444"; // CRITICAL -> red
-            else if (risk.category === "HIGH") fillColorHex = "#f97316"; // HIGH -> orange
-            else if (risk.category === "MODERATE") fillColorHex = "#eab308"; // MODERATE -> yellow
+            let fillColorHex = "#10b981";
+            if (risk.category === "CRITICAL") fillColorHex = "#ef4444";
+            else if (risk.category === "HIGH") fillColorHex = "#f97316";
+            else if (risk.category === "MODERATE") fillColorHex = "#eab308";
 
             const polygon = L.polygon(zone.coordinates, {
                 color: fillColorHex,
@@ -137,7 +249,6 @@ window.MapManager = {
                 fillOpacity: risk.category === "CRITICAL" ? 0.6 : (risk.category === "HIGH" ? 0.5 : 0.28)
             });
 
-            // Refined Zone Popup
             const popupContent = `
                 <div class="gis-popup-content" style="font-family:Inter, sans-serif; min-width:260px; padding:4px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:8px; margin-bottom:10px;">
@@ -209,13 +320,12 @@ window.MapManager = {
     },
 
     /**
-     * Render Drainage Graph Layer (Pipes & Nodes)
+     * Render Drainage Graph Layer
      */
     renderDrainageGraph: function(graphState) {
         if (!this.layers.drainageGraph) return;
         this.layers.drainageGraph.clearLayers();
 
-        // Render Pipe Edges
         graphState.edges.forEach(edge => {
             const sourceNode = graphState.nodes.find(n => n.id === edge.source);
             const targetNode = graphState.nodes.find(n => n.id === edge.target);
@@ -244,7 +354,6 @@ window.MapManager = {
             }
         });
 
-        // Render Nodes
         graphState.nodes.forEach(node => {
             let iconHtml = `<div style="background:#0284c7; width:10px; height:10px; border-radius:50%; border:2px solid #fff;"></div>`;
             if (node.type === "pump") {
@@ -300,7 +409,7 @@ window.MapManager = {
     },
 
     /**
-     * Render Emergency Facilities (Shelters, Hospitals, Fire Stations)
+     * Render Emergency Facilities
      */
     renderFacilities: function(facilities) {
         if (!this.layers.shelters || !this.layers.hospitals || !this.layers.fireStations) return;
@@ -367,7 +476,7 @@ window.MapManager = {
     },
 
     /**
-     * Render Safe Navigation Route
+     * Render Navigation Route Polyline on Main Map
      */
     renderNavigationRoute: function(routeResult) {
         if (!this.layers.route) return;
@@ -390,8 +499,6 @@ window.MapManager = {
                 opacity: 0.95
             }).bindTooltip("Recommended Safe Route (Elevated Bypass)");
             this.layers.route.addLayer(safePoly);
-
-            this.map.fitBounds(safePoly.getBounds(), { padding: [40, 40] });
         }
     }
 };

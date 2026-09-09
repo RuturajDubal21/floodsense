@@ -35,9 +35,9 @@
                 <span>Live Telemetry • <span id="live-clock">18:52:30</span></span>
             </div>
             
-            <button id="btn-detect-gps" class="btn btn-sm btn-light" style="border:1px solid #38bdf8; color:#38bdf8;">
-                📍 Detect My GPS Location
-            </button>
+            <div class="telemetry-pill citizen-only" style="border:1px solid rgba(56,189,248,0.3); color:#38bdf8; background:rgba(56,189,248,0.08);">
+                📍 Region: Wakad Sub-basin
+            </div>
 
             <div class="role-switcher-container">
                 <button class="role-btn active" data-role-switch="citizen">👤 Citizen View</button>
@@ -45,21 +45,6 @@
             </div>
         </div>
     </header>
-
-    <!-- Flood Simulator Toolbar -->
-    <div class="simulation-bar">
-        <div style="display:flex; align-items:center; gap:8px;">
-            <strong style="color:#a5b4fc;">⚡ FLOOD SIMULATOR:</strong>
-            <span style="color:#cbd5e1; font-size:12px;">Simulate live weather & hydrological drainage overload</span>
-        </div>
-        <div class="sim-controls-group">
-            <button class="btn-sim btn-sim-rain" id="btn-sim-heavy-rain">🌧️ Simulate Heavy Rainfall</button>
-            <button class="btn-sim btn-sim-block" id="btn-sim-drain-block">🚫 Simulate Drain Blockage</button>
-            <button class="btn-sim btn-sim-burst" id="btn-sim-cloudburst">⚡ Simulate Cloudburst</button>
-            <button class="btn-sim btn-sim-reset" id="btn-sim-reset">🔄 Reset System</button>
-            <button class="btn-sim" id="btn-sim-tour" style="background:#4338ca; border-color:#6366f1;">⏯️ Run Demo Scenario</button>
-        </div>
-    </div>
 
     <!-- Navigation Bar -->
     <nav class="main-nav">
@@ -178,27 +163,70 @@
         </section>
 
         <!-- ===================================================================
-             VIEW 3: SAFE NAVIGATION ROUTING
+             VIEW 3: SAFE NAVIGATION ROUTING (WITH ACCURATE OPENSTREETMAP ROUTING)
              =================================================================== -->
         <section id="view-routes" class="view-section" style="display:none;">
+            
+            <!-- Route Selection Toolbar -->
             <div class="glass-panel" style="padding:22px; margin-bottom:20px;">
-                <h3 style="font-size:18px; margin-bottom:14px; color:#f8fafc;">🛣️ Disaster Navigation & Flood-Safe Router</h3>
-                <div style="display:grid; grid-template-columns:1fr 2fr; gap:16px; align-items:center;">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
                     <div>
-                        <label class="form-label">Destination</label>
+                        <h3 style="font-size:18px; color:#f8fafc; margin:0;">🛣️ Flood-Safe Navigation & Dijkstra Router</h3>
+                        <p style="font-size:12px; color:#94a3b8; margin-top:2px;">
+                            Calculates optimal route bypassing submerged underpasses (>15cm depth) and emergency closures.
+                        </p>
+                    </div>
+                    <span class="badge badge-low">FLOOD-SAFE ROUTING ACTIVE</span>
+                </div>
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:16px; align-items:flex-end; flex-wrap:wrap;">
+                    <div>
+                        <label class="form-label">Start Location (Origin)</label>
+                        <input type="text" class="form-control" value="📍 Wakad Station (Origin)" readonly>
+                    </div>
+                    <div>
+                        <label class="form-label">Destination Location</label>
                         <select id="select-destination" class="form-control">
+                            <option value="zone-wakad">Wakad Chowk (Wakad Flyover & Bus Junction)</option>
                             <option value="zone-shivajinagar">Shivajinagar Central Station (COEP)</option>
-                            <option value="zone-aundh">Aundh Relief Hospital</option>
-                            <option value="zone-hinjewadi">Hinjewadi IT Park Gate 1</option>
+                            <option value="zone-aundh">Aundh Relief Hospital & Disaster Camp</option>
+                            <option value="zone-hinjewadi">Hinjewadi Rajiv Gandhi IT Park Gate 1</option>
+                            <option value="zone-kothrud">Kothrud Disaster Relief Auditorium</option>
+                            <option value="zone-vimannagar">Viman Nagar Emergency Airforce Station</option>
                         </select>
                     </div>
-                    <div style="font-size:12px; color:#94a3b8;">
-                        * FloodSense routing engine checks flood-risk level and automatically <strong>AVOIDS HIGH/CRITICAL flooded roads</strong>.
-                    </div>
+                    <button id="btn-recalculate-route" class="btn btn-primary" style="height:44px;">
+                        🗺️ Recalculate Safe Route
+                    </button>
                 </div>
             </div>
 
-            <div id="route-comparison-container"></div>
+            <!-- Embedded Interactive OpenStreetMap Navigation Canvas -->
+            <div style="margin-bottom:24px;">
+                <div class="glass-panel" style="padding:14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="color:#f8fafc; font-size:13px;">🗺️ OpenStreetMap Navigation Canvas (Avoids >15cm Flooded Underpasses)</strong>
+                    <div style="font-size:11px; display:flex; gap:14px;">
+                        <span style="color:#10b981; font-weight:bold;">🟢 Green Solid: Recommended Safe Path</span>
+                        <span style="color:#ef4444; font-weight:bold;">🔴 Red Dashed: Flooded Danger Path</span>
+                    </div>
+                </div>
+                <div id="navigation-gis-map" class="map-container-box" style="height:480px;"></div>
+            </div>
+
+            <!-- Route Stats & Turn Directions Grid -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+                
+                <!-- Route Stats Cards -->
+                <div id="route-comparison-container"></div>
+
+                <!-- Turn-by-Turn Directions Container -->
+                <div class="glass-panel" style="padding:22px;">
+                    <h3 style="font-size:16px; margin-bottom:14px; color:#f8fafc;">🧭 Step-by-Step Safe Navigation Directions</h3>
+                    <div id="turn-by-turn-container"></div>
+                </div>
+
+            </div>
+
         </section>
 
         <!-- ===================================================================
@@ -285,10 +313,11 @@
         </section>
 
         <!-- ===================================================================
-             VIEW 6: ADMIN COMMAND CENTER
+             VIEW 6: ADMIN COMMAND CENTER (EMERGENCY AUTHORITY EXCLUSIVE)
              =================================================================== -->
         <section id="view-admin_command" class="view-section" style="display:none;">
             
+            <!-- KPI Counters -->
             <div class="grid-kpi">
                 <div class="glass-panel kpi-card" style="border-left-color:#ef4444;">
                     <div class="kpi-title">Active High Alerts</div>
@@ -308,6 +337,32 @@
                 </div>
             </div>
 
+            <!-- EMERGENCY AUTHORITY EXCLUSIVE: Hydrological Flood Simulator Console -->
+            <div class="glass-panel" style="padding:20px; margin-bottom:24px; border:1px solid rgba(99, 102, 241, 0.4); background: linear-gradient(135deg, rgba(30, 27, 75, 0.7), rgba(15, 23, 42, 0.9));">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:14px;">
+                    <div>
+                        <h3 style="font-size:17px; color:#a5b4fc; margin:0; display:flex; align-items:center; gap:8px;">
+                            ⚡ Emergency Authority Flood Simulator & Hydrological Stress Tester
+                        </h3>
+                        <p style="font-size:12px; color:#cbd5e1; margin-top:4px;">
+                            Simulate weather surges, cloudbursts, and trunk channel blockages to test city emergency readiness.
+                        </p>
+                    </div>
+                    <span class="badge" style="background:rgba(99, 102, 241, 0.25); color:#a5b4fc; border:1px solid rgba(99, 102, 241, 0.4);">
+                        AUTHORITY EXCLUSIVE
+                    </span>
+                </div>
+                
+                <div class="sim-controls-group">
+                    <button class="btn-sim btn-sim-rain" id="btn-sim-heavy-rain">🌧️ Simulate Heavy Rainfall</button>
+                    <button class="btn-sim btn-sim-block" id="btn-sim-drain-block">🚫 Simulate Drain Blockage</button>
+                    <button class="btn-sim btn-sim-burst" id="btn-sim-cloudburst">⚡ Simulate Cloudburst</button>
+                    <button class="btn-sim btn-sim-reset" id="btn-sim-reset">🔄 Reset System</button>
+                    <button class="btn-sim" id="btn-sim-tour" style="background:#4338ca; border-color:#6366f1;">⏯️ Run Demo Scenario</button>
+                </div>
+            </div>
+
+            <!-- Admin Live Command Map -->
             <div style="margin-bottom:24px;">
                 <div class="glass-panel" style="padding:14px; margin-bottom:8px;">
                     <strong style="color:#f8fafc;">🛡️ City Command Center OpenStreetMap GIS & Graph Hydraulics</strong>
@@ -315,6 +370,7 @@
                 <div id="admin-gis-map" class="map-container-box"></div>
             </div>
 
+            <!-- Admin Controls Grid -->
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
                 
                 <div class="glass-panel" style="padding:20px;">

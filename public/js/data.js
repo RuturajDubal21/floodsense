@@ -388,9 +388,9 @@ window.FLOODSENSE_DATA = {
         { id: "fire-2", name: "Shivajinagar Disaster Management Fire HQ", type: "fire_station", coords: [18.5310, 73.8440], phone: "101", boatsAvailable: 12, zoneId: "zone-shivajinagar" }
     ],
 
-    // Default Citizen User Coordinates
+    // Default Citizen Origin Station Coordinates (Fixed Sub-basin Station)
     defaultUserLocation: {
-        name: "Wakad Chowk (Current GPS)",
+        name: "Wakad Station Origin",
         coords: [18.5960, 73.7620],
         zoneId: "zone-wakad",
         homeLocation: [18.5990, 73.7610],
