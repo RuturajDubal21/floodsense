@@ -27,7 +27,9 @@ window.FloodSenseApp = {
         userLocation: window.FLOODSENSE_DATA.defaultUserLocation,
         selectedDestination: "zone-shivajinagar",
         activeSimulationScenarioStep: 0,
-        simulationTimer: null
+        simulationTimer: null,
+        sessionUser: null,
+        sessionToken: localStorage.getItem("floodsense_token") || null
     },
 
     // Processed Results Cache
@@ -49,6 +51,8 @@ window.FloodSenseApp = {
         this.detectUserLocation();
         this.bindEvents();
 
+        this.checkExistingSession();
+
         this.recalculateState();
         this.renderAllViews();
 
@@ -58,6 +62,31 @@ window.FloodSenseApp = {
         }, 3000);
 
         this.initSSEConnection();
+    },
+
+    /**
+     * Check existing session token with backend API
+     */
+    checkExistingSession: function() {
+        if (!this.state.sessionToken) return;
+
+        fetch('/api/session', {
+            headers: { 'Authorization': 'Bearer ' + this.state.sessionToken }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.user) {
+                this.state.sessionUser = data.user;
+                this.updateAuthUI();
+            } else {
+                this.state.sessionToken = null;
+                localStorage.removeItem("floodsense_token");
+                this.updateAuthUI();
+            }
+        })
+        .catch(err => {
+            console.warn("Session check offline fallback.");
+        });
     },
 
     /**
@@ -177,12 +206,31 @@ window.FloodSenseApp = {
             this.renderRouteView();
             this.showBannerToast("🗺️ Dijkstra Safe Navigation Route recalculated!");
         });
+
+        // Authentication Modal Event Listeners
+        document.getElementById("form-admin-login")?.addEventListener("submit", (e) => {
+            e.preventDefault();
+            this.handleLoginSubmit();
+        });
+
+        document.getElementById("btn-cancel-login")?.addEventListener("click", () => {
+            this.closeLoginModal();
+        });
+
+        document.getElementById("btn-officer-logout")?.addEventListener("click", () => {
+            this.logoutOfficer();
+        });
     },
 
     /**
-     * Role Switcher Handler
+     * Role Switcher Handler (Protected by Emergency Authority Login)
      */
     switchRole: function(role) {
+        if (role === "admin" && !this.state.sessionUser) {
+            this.openLoginModal();
+            return;
+        }
+
         this.state.activeRole = role;
         document.body.setAttribute("data-role", role);
 
@@ -194,6 +242,111 @@ window.FloodSenseApp = {
             this.switchTab("admin_command");
         } else {
             this.switchTab("dashboard");
+        }
+    },
+
+    /**
+     * Open Emergency Authority Login Modal
+     */
+    openLoginModal: function() {
+        const modal = document.getElementById("modal-admin-login");
+        if (modal) {
+            modal.style.display = "flex";
+            document.getElementById("login-error-alert").style.display = "none";
+            document.getElementById("login-username").focus();
+        }
+    },
+
+    /**
+     * Close Emergency Authority Login Modal
+     */
+    closeLoginModal: function() {
+        const modal = document.getElementById("modal-admin-login");
+        if (modal) {
+            modal.style.display = "none";
+        }
+    },
+
+    /**
+     * Handle Login Form Submission
+     */
+    handleLoginSubmit: function() {
+        const usernameInput = document.getElementById("login-username");
+        const passwordInput = document.getElementById("login-password");
+        const errorAlert = document.getElementById("login-error-alert");
+
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value.trim();
+
+        if (!username || !password) {
+            errorAlert.textContent = "Please enter both username and password.";
+            errorAlert.style.display = "block";
+            return;
+        }
+
+        fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success && data.token) {
+                this.state.sessionToken = data.token;
+                this.state.sessionUser = data.user;
+                localStorage.setItem("floodsense_token", data.token);
+
+                this.closeLoginModal();
+                this.updateAuthUI();
+                this.switchRole("admin");
+                this.showBannerToast(`🔓 Authenticated as ${data.user.full_name} (${data.user.badge_number})`);
+            } else {
+                errorAlert.textContent = data.error || data.message || "Invalid username or password.";
+                errorAlert.style.display = "block";
+            }
+        })
+        .catch(err => {
+            errorAlert.textContent = "Network error during login request.";
+            errorAlert.style.display = "block";
+        });
+    },
+
+    /**
+     * Logout Officer Session
+     */
+    logoutOfficer: function() {
+        if (this.state.sessionToken) {
+            fetch('/api/logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: this.state.sessionToken })
+            }).catch(() => {});
+        }
+
+        this.state.sessionToken = null;
+        this.state.sessionUser = null;
+        localStorage.removeItem("floodsense_token");
+
+        this.updateAuthUI();
+        this.switchRole("citizen");
+        this.showBannerToast("🔒 Logged out of Emergency Authority Portal.");
+    },
+
+    /**
+     * Update Authentication UI Header & Controls
+     */
+    updateAuthUI: function() {
+        const sessionPill = document.getElementById("officer-session-pill");
+        const nameDisplay = document.getElementById("officer-name-display");
+
+        if (this.state.sessionUser) {
+            if (sessionPill) sessionPill.style.display = "flex";
+            if (nameDisplay) nameDisplay.textContent = `${this.state.sessionUser.full_name} (${this.state.sessionUser.badge_number || 'PMC-EMG'})`;
+        } else {
+            if (sessionPill) sessionPill.style.display = "none";
+            if (this.state.activeRole === "admin") {
+                this.switchRole("citizen");
+            }
         }
     },
 
