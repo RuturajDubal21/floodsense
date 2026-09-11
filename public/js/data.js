@@ -374,11 +374,15 @@ window.FLOODSENSE_DATA = {
         }
     ],
 
-    // Emergency Facilities Data
+    // Emergency Facilities Data (Hospitals, Shelters, Fire Stations)
     emergencyServices: [
-        { id: "hosp-1", name: "Surya Mother & Child Super Specialty Hospital", type: "hospital", coords: [18.5975, 73.7645], phone: "108 / +91-20-67911111", zoneId: "zone-wakad" },
-        { id: "hosp-2", name: "Jupiter Hospital Baner", type: "hospital", coords: [18.5620, 73.7890], phone: "+91-20-27992799", zoneId: "zone-baner" },
-        { id: "hosp-3", name: "Sashwat Hospital Aundh", type: "hospital", coords: [18.5600, 73.8060], phone: "+91-20-25880020", zoneId: "zone-aundh" },
+        { id: "hosp-1", name: "Surya Mother & Child Super Specialty Hospital", type: "hospital", coords: [18.5975, 73.7645], phone: "108 / +91-20-67911111", zoneId: "zone-wakad", bedsAvailable: 28, emergencyICU: "OPEN" },
+        { id: "hosp-2", name: "Jupiter Hospital Baner", type: "hospital", coords: [18.5620, 73.7890], phone: "+91-20-27992799", zoneId: "zone-baner", bedsAvailable: 45, emergencyICU: "OPEN" },
+        { id: "hosp-3", name: "Sashwat Hospital Aundh", type: "hospital", coords: [18.5600, 73.8060], phone: "+91-20-25880020", zoneId: "zone-aundh", bedsAvailable: 15, emergencyICU: "OPEN" },
+        { id: "hosp-4", name: "Ruby Hall Clinic Hinjewadi", type: "hospital", coords: [18.5910, 73.7380], phone: "+91-20-66455555", zoneId: "zone-hinjewadi", bedsAvailable: 32, emergencyICU: "OPEN" },
+        { id: "hosp-5", name: "Sancheti Hospital & COEP Trauma Center", type: "hospital", coords: [18.5305, 73.8510], phone: "+91-20-28999999", zoneId: "zone-shivajinagar", bedsAvailable: 50, emergencyICU: "OPEN" },
+        { id: "hosp-6", name: "Deenanath Mangeshkar Hospital Kothrud", type: "hospital", coords: [18.5040, 73.8120], phone: "+91-20-40151000", zoneId: "zone-kothrud", bedsAvailable: 60, emergencyICU: "OPEN" },
+        { id: "hosp-7", name: "Symbiosis University Hospital Viman Nagar", type: "hospital", coords: [18.5690, 73.9120], phone: "+91-20-61230000", zoneId: "zone-vimannagar", bedsAvailable: 40, emergencyICU: "OPEN" },
         
         { id: "shelter-1", name: "Wakad Municipal Primary School Relief Camp", type: "shelter", coords: [18.5990, 73.7610], capacity: 500, currentOccupancy: 42, zoneId: "zone-wakad" },
         { id: "shelter-2", name: "Baner Community Disaster Shelter", type: "shelter", coords: [18.5670, 73.7850], capacity: 750, currentOccupancy: 15, zoneId: "zone-baner" },
@@ -386,6 +390,18 @@ window.FLOODSENSE_DATA = {
 
         { id: "fire-1", name: "Pimpri Chinchwad Main Fire Station", type: "fire_station", coords: [18.6250, 73.8100], phone: "101", boatsAvailable: 6, zoneId: "zone-wakad" },
         { id: "fire-2", name: "Shivajinagar Disaster Management Fire HQ", type: "fire_station", coords: [18.5310, 73.8440], phone: "101", boatsAvailable: 12, zoneId: "zone-shivajinagar" }
+    ],
+
+    // Emergency Helplines & Control Room Directory
+    emergencyHelplines: [
+        { name: "National Emergency Number", number: "112", category: "NATIONAL", icon: "🚨", desc: "Unified Emergency Services (Police, Fire, Medical)", badge: "24/7 TOLL FREE" },
+        { name: "Ambulance & Emergency Medical Response", number: "108", category: "MEDICAL", icon: "🚑", desc: "Free 24x7 Medical Response & Trauma Care", badge: "24/7 TOLL FREE" },
+        { name: "Fire & Disaster Rescue Brigade", number: "101", category: "RESCUE", icon: "🚒", desc: "Fire Services & Submerged Vehicle Extraction", badge: "24/7 TOLL FREE" },
+        { name: "PMC Disaster Management Control Room", number: "020-25501269", category: "LOCAL_CONTROL", icon: "🏢", desc: "Pune Municipal Corporation Emergency Flood Cell", badge: "LOCAL HQ" },
+        { name: "PCMC Disaster Helpline", number: "020-67333333", category: "LOCAL_CONTROL", icon: "🏢", desc: "Pimpri Chinchwad Municipal Control Room", badge: "LOCAL HQ" },
+        { name: "NDRF Flood Evacuation Unit", number: "011-24363260", category: "NDRF", icon: "🚤", desc: "National Disaster Response Force Boat Evacuation", badge: "EVACUATION" },
+        { name: "Police Control Helpline", number: "100", category: "POLICE", icon: "👮", desc: "Local Police Traffic Detour & Safety Support", badge: "24/7 TOLL FREE" },
+        { name: "Wakad Sub-basin Rescue Division", number: "020-27610101", category: "LOCAL_STATION", icon: "📍", desc: "Wakad Local Disaster Rescue Squad", badge: "SUB-BASIN HQ" }
     ],
 
     // Default Citizen Origin Station Coordinates (Fixed Sub-basin Station)

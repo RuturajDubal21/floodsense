@@ -17,14 +17,17 @@ window.MapManager = {
         hospitals: null,
         fireStations: null,
         reports: null,
-        route: null
+        route: null,
+        lowTerrain: null
     },
     navLayers: {
         origin: null,
         dest: null,
         directRoute: null,
         safeRoute: null,
-        hazards: null
+        hazards: null,
+        hospitals: null,
+        lowTerrain: null
     },
     layerControl: null,
 
@@ -64,10 +67,12 @@ window.MapManager = {
         this.layers.fireStations = L.layerGroup().addTo(this.map);
         this.layers.reports = L.layerGroup().addTo(this.map);
         this.layers.route = L.layerGroup().addTo(this.map);
+        this.layers.lowTerrain = L.layerGroup().addTo(this.map);
 
         const overlayMaps = {
             "📍 Station Origin Pin": this.layers.userLocation,
             "🌊 Flood Risk Zones": this.layers.zones,
+            "🏔️ Low Terrain Sinks (DEM)": this.layers.lowTerrain,
             "🌧️ Rainfall Radar": this.layers.rainfallHeat,
             "🛣️ Road Network": this.layers.roads,
             "💧 Drainage Network Graph": this.layers.drainageGraph,
@@ -109,6 +114,7 @@ window.MapManager = {
             this.navLayers.directRoute = L.layerGroup().addTo(this.navMap);
             this.navLayers.safeRoute = L.layerGroup().addTo(this.navMap);
             this.navLayers.hazards = L.layerGroup().addTo(this.navMap);
+            this.navLayers.hospitals = L.layerGroup().addTo(this.navMap);
         }
 
         // Clear previous navigation layers
@@ -117,11 +123,12 @@ window.MapManager = {
         this.navLayers.directRoute.clearLayers();
         this.navLayers.safeRoute.clearLayers();
         this.navLayers.hazards.clearLayers();
+        if (this.navLayers.hospitals) this.navLayers.hospitals.clearLayers();
 
         const destObj = routeResult.destination;
         const destCoords = destObj.coords;
 
-        // 1. Render Origin Pin (Green Pulsing GPS Marker - Re-added as requested)
+        // 1. Render Origin Pin (Green Pulsing GPS Marker)
         const originIcon = L.divIcon({
             html: `<div style="background:#10b981; color:#fff; font-size:11px; font-weight:bold; padding:4px 8px; border-radius:14px; border:2px solid #fff; box-shadow:0 0 10px #10b981; white-space:nowrap;">📍 START (ORIGIN)</div>`,
             className: "nav-pin-origin",
@@ -143,6 +150,29 @@ window.MapManager = {
         destMarker.bindPopup(`<strong>🏁 ${destObj.name}</strong><br/>Safe Destination`);
         this.navLayers.dest.addLayer(destMarker);
 
+        // 3. Render Emergency Hospitals along the route
+        const hospitals = (window.FLOODSENSE_DATA.emergencyServices || []).filter(s => s.type === "hospital");
+        hospitals.forEach(hosp => {
+            const hospIcon = L.divIcon({
+                html: `<div style="background:#0284c7; color:#fff; font-size:10px; font-weight:bold; padding:3px 7px; border-radius:12px; border:2px solid #fff; box-shadow:0 0 10px rgba(56, 189, 248, 0.9); white-space:nowrap;">🏥 ${hosp.name.split(' ')[0]}</div>`,
+                className: "nav-pin-hospital",
+                iconSize: [100, 22],
+                iconAnchor: [50, 11]
+            });
+            const hospMarker = L.marker(hosp.coords, { icon: hospIcon });
+            hospMarker.bindPopup(`
+                <div style="font-family:Inter, sans-serif; font-size:12px;">
+                    <div style="font-weight:bold; color:#38bdf8; font-size:13px;">🏥 ${hosp.name}</div>
+                    <div style="margin-top:4px; color:#cbd5e1;">Emergency ICU: <strong style="color:#10b981;">${hosp.emergencyICU || 'OPEN'}</strong></div>
+                    <div style="color:#cbd5e1;">Beds Available: <strong>${hosp.bedsAvailable || 25}</strong></div>
+                    <div style="margin-top:6px;">
+                        <a href="tel:${hosp.phone.split('/')[0].trim()}" class="btn btn-sm btn-primary" style="padding:2px 8px; font-size:10px; text-decoration:none; display:inline-block; border-radius:4px;">📞 Call ${hosp.phone}</a>
+                    </div>
+                </div>
+            `);
+            this.navLayers.hospitals.addLayer(hospMarker);
+        });
+
         // 3. Render Direct Route (Red Dashed Line with Hazard Callout)
         if (routeResult.directRoute && routeResult.directRoute.pathCoordinates) {
             const directPoly = L.polyline(routeResult.directRoute.pathCoordinates, {
@@ -163,6 +193,19 @@ window.MapManager = {
             hazardMarker.bindPopup(`<strong style="color:#ef4444;">⚠️ FLOODED UNDERPASS HAZARD</strong><br/>Water Depth: 28 cm<br/>Risk: CRITICAL — Detour Enforced by Dijkstra Router!`);
             this.navLayers.hazards.addLayer(hazardMarker);
         }
+
+        // 4. Render Low Terrain Sinks on Navigation Map
+        const lowTerrainZones = (window.FLOODSENSE_DATA.zones || []).filter(z => z.elevationMeters <= 555);
+        lowTerrainZones.forEach(z => {
+            const sinkIcon = L.divIcon({
+                html: `<div style="background:#0891b2; color:#fff; font-size:9px; font-weight:bold; padding:2px 5px; border-radius:8px; border:1px solid #fff; box-shadow:0 0 8px #06b6d4; white-space:nowrap;">🏔️ SINK ${z.elevationMeters}m</div>`,
+                className: "nav-pin-sink",
+                iconSize: [85, 18]
+            });
+            const sinkMarker = L.marker(z.center, { icon: sinkIcon });
+            sinkMarker.bindPopup(`<strong>🏔️ Low Terrain Sink: ${z.name}</strong><br/>Elevation: ${z.elevationMeters}m | Slope: ${z.slopePercent}%<br/>Water accumulates here during heavy rainfall.`);
+            this.navLayers.hazards.addLayer(sinkMarker);
+        });
 
         // 4. Render Recommended Safe Path (Glowing Green Polyline)
         if (routeResult.safeRoute && routeResult.safeRoute.pathCoordinates) {
@@ -500,5 +543,52 @@ window.MapManager = {
             }).bindTooltip("Recommended Safe Route (Elevated Bypass)");
             this.layers.route.addLayer(safePoly);
         }
+    },
+
+    /**
+     * Render Low Terrain Sinks & DEM Elevation Vulnerability Depressions
+     */
+    renderLowTerrain: function(zones) {
+        if (!this.layers.lowTerrain) return;
+        this.layers.lowTerrain.clearLayers();
+
+        zones.forEach(zone => {
+            // Identify low-lying terrain (Elevation <= 555m or slope <= 1.5%)
+            if (zone.elevationMeters <= 555 || zone.slopePercent <= 1.5) {
+                // Polygon highlighting low terrain basin
+                const poly = L.polygon(zone.coordinates, {
+                    color: "#06b6d4",
+                    fillColor: "#0891b2",
+                    fillOpacity: 0.35,
+                    weight: 2,
+                    dashArray: "6, 6"
+                }).bindTooltip(`🏔️ Low Terrain Sink: ${zone.name} (${zone.elevationMeters}m Elevation, Slope ${zone.slopePercent}%)`);
+
+                this.layers.lowTerrain.addLayer(poly);
+
+                // Low Terrain Callout Marker Pin
+                const lowIcon = L.divIcon({
+                    html: `<div style="background:#0891b2; color:#fff; font-size:10px; font-weight:bold; padding:3px 7px; border-radius:10px; border:1px solid #fff; box-shadow:0 0 10px #06b6d4; white-space:nowrap;">🏔️ SINK (${zone.elevationMeters}m)</div>`,
+                    className: "nav-pin-low-terrain",
+                    iconSize: [110, 22],
+                    iconAnchor: [55, 11]
+                });
+
+                const marker = L.marker(zone.center, { icon: lowIcon });
+                marker.bindPopup(`
+                    <div style="font-family:Inter, sans-serif; font-size:12px; max-width:240px;">
+                        <div style="color:#06b6d4; font-weight:bold; font-size:13px;">🏔️ LOW TERRAIN WATER ACCUMULATION SINK</div>
+                        <div style="margin-top:4px;">Sub-basin: <strong>${zone.name}</strong></div>
+                        <div style="color:#cbd5e1;">Ground Elevation: <strong style="color:#38bdf8;">${zone.elevationMeters} meters</strong></div>
+                        <div style="color:#cbd5e1;">Terrain Slope: <strong>${zone.slopePercent}% (Low slope = pooling)</strong></div>
+                        <div style="font-size:11px; color:#94a3b8; margin-top:6px; background:rgba(6, 182, 212, 0.15); padding:6px; border-radius:4px;">
+                            ⚠️ Hydrological Warning: Runoff from high terrain converges in this depression during intense rainfall.
+                        </div>
+                    </div>
+                `);
+
+                this.layers.lowTerrain.addLayer(marker);
+            }
+        });
     }
 };

@@ -510,6 +510,8 @@ window.FloodSenseApp = {
             this.renderMapLayers();
         } else if (tab === "routes") {
             this.renderRouteView();
+        } else if (tab === "contacts") {
+            this.renderContactsView();
         } else if (tab === "reports") {
             this.renderReportsList();
         } else if (tab === "alerts") {
@@ -598,6 +600,7 @@ window.FloodSenseApp = {
         window.MapManager.renderZones(data.zones, this.computed.zoneRiskMap, (zone, risk) => {
             this.showBannerToast(`Selected Zone: ${zone.name} | Risk: ${risk.category} (${risk.riskScore}/100)`);
         });
+        window.MapManager.renderLowTerrain(data.zones);
         window.MapManager.renderRainfallLayer(data.zones, this.computed.zoneRiskMap);
         window.MapManager.renderDrainageGraph(this.computed.graphState);
         window.MapManager.renderRoads(data.roads, this.computed.zoneRiskMap, this.state.adminBlockedRoadIds);
@@ -678,7 +681,35 @@ window.FloodSenseApp = {
             stepsContainer.innerHTML = stepsHtml;
         }
 
-        // 3. Render Embedded Navigation OpenStreetMap Canvas
+        // 3. Render Emergency Hospitals Along Safe Shortest Route
+        const hospContainer = document.getElementById("route-hospitals-container");
+        if (hospContainer) {
+            const hospitals = (window.FLOODSENSE_DATA.emergencyServices || []).filter(s => s.type === "hospital");
+            let hospHtml = "";
+            hospitals.forEach(hosp => {
+                const zName = window.FLOODSENSE_DATA.zones.find(z => z.id === hosp.zoneId)?.name || hosp.zoneId;
+                hospHtml += `
+                    <div style="background:rgba(15,23,42,0.7); padding:14px; border-radius:10px; border:1px solid rgba(56,189,248,0.3); display:flex; flex-direction:column; justify-content:space-between;">
+                        <div>
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                                <strong style="color:#f8fafc; font-size:14px;">🏥 ${hosp.name}</strong>
+                                <span style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(16,185,129,0.2); color:#10b981; font-weight:bold;">${hosp.emergencyICU || 'ICU OPEN'}</span>
+                            </div>
+                            <div style="font-size:11px; color:#94a3b8; margin-top:4px;">Sub-basin Zone: ${zName}</div>
+                            <div style="font-size:12px; color:#cbd5e1; margin-top:6px;">Trauma Beds: <strong style="color:#10b981;">${hosp.bedsAvailable || 25} Beds Available</strong></div>
+                        </div>
+                        <div style="margin-top:12px;">
+                            <a href="tel:${hosp.phone.split('/')[0].trim()}" class="btn btn-sm btn-primary" style="width:100%; text-align:center; padding:6px; font-size:11px; font-weight:bold; text-decoration:none; display:block; border-radius:6px;">
+                                📞 Call ${hosp.phone}
+                            </a>
+                        </div>
+                    </div>
+                `;
+            });
+            hospContainer.innerHTML = hospHtml;
+        }
+
+        // 4. Render Embedded Navigation OpenStreetMap Canvas
         setTimeout(() => {
             window.MapManager.renderDedicatedNavigationMap(
                 "navigation-gis-map",
@@ -686,6 +717,69 @@ window.FloodSenseApp = {
                 this.state.userLocation.coords
             );
         }, 100);
+    },
+
+    /**
+     * Render Citizen Emergency Contacts & Helplines Directory View
+     */
+    renderContactsView: function() {
+        const helplinesGrid = document.getElementById("helplines-directory-grid");
+        const hospitalsGrid = document.getElementById("hospitals-directory-grid");
+
+        if (helplinesGrid) {
+            const helplines = window.FLOODSENSE_DATA.emergencyHelplines || [];
+            let html = "";
+            helplines.forEach(h => {
+                html += `
+                    <div style="background:rgba(15,23,42,0.75); padding:18px; border-radius:12px; border:1px solid rgba(239,68,68,0.3); display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 4px 15px rgba(0,0,0,0.3);">
+                        <div>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:26px;">${h.icon}</span>
+                                <span style="font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; background:rgba(239,68,68,0.2); color:#f87171; border:1px solid rgba(239,68,68,0.3);">${h.badge}</span>
+                            </div>
+                            <h4 style="font-size:15px; color:#f8fafc; margin:10px 0 4px 0;">${h.name}</h4>
+                            <p style="font-size:11px; color:#94a3b8; margin:0 0 10px 0;">${h.desc}</p>
+                            <div style="font-size:20px; font-weight:800; color:#ef4444; font-family:'JetBrains Mono', monospace;">${h.number}</div>
+                        </div>
+                        <div style="margin-top:14px;">
+                            <a href="tel:${h.number.replace(/\s+/g, '')}" class="btn btn-danger btn-sm" style="width:100%; text-align:center; padding:8px; font-weight:bold; font-size:12px; text-decoration:none; display:block; border-radius:6px; box-shadow:0 0 10px rgba(239,68,68,0.4);">
+                                📞 Call Helpline (${h.number})
+                            </a>
+                        </div>
+                    </div>
+                `;
+            });
+            helplinesGrid.innerHTML = html;
+        }
+
+        if (hospitalsGrid) {
+            const hospitals = (window.FLOODSENSE_DATA.emergencyServices || []).filter(s => s.type === "hospital");
+            let html = "";
+            hospitals.forEach(h => {
+                const zName = window.FLOODSENSE_DATA.zones.find(z => z.id === h.zoneId)?.name || h.zoneId;
+                html += `
+                    <div style="background:rgba(15,23,42,0.75); padding:18px; border-radius:12px; border:1px solid rgba(56,189,248,0.3); display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 4px 15px rgba(0,0,0,0.3);">
+                        <div>
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                                <strong style="color:#f8fafc; font-size:15px;">🏥 ${h.name}</strong>
+                                <span style="font-size:10px; font-weight:bold; padding:3px 8px; border-radius:10px; background:rgba(16,185,129,0.2); color:#10b981; border:1px solid rgba(16,185,129,0.3);">${h.emergencyICU || 'ICU OPEN'}</span>
+                            </div>
+                            <div style="font-size:12px; color:#38bdf8; margin-top:4px;">Sub-basin: ${zName}</div>
+                            <div style="font-size:12px; color:#cbd5e1; margin-top:10px; line-height:1.6;">
+                                🚑 Emergency ICU: <strong style="color:#10b981;">AVAILABLE 24/7</strong><br>
+                                🛏️ Trauma Beds: <strong style="color:#f8fafc;">${h.bedsAvailable || 30} Beds Ready</strong>
+                            </div>
+                        </div>
+                        <div style="margin-top:16px;">
+                            <a href="tel:${h.phone.split('/')[0].trim()}" class="btn btn-primary btn-sm" style="width:100%; text-align:center; padding:8px; font-weight:bold; font-size:12px; text-decoration:none; display:block; border-radius:6px;">
+                                📞 Call Hospital (${h.phone})
+                            </a>
+                        </div>
+                    </div>
+                `;
+            });
+            hospitalsGrid.innerHTML = html;
+        }
     },
 
     renderReportsList: function() {
